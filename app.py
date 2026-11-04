@@ -61,14 +61,14 @@ if urls_input:
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
                     response = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini-3.8-flash",
                         contents=prompt
                     )
                     break
 
                 except Exception as e:
                     if attempt < max_retries:
-                        time.sleep(5)
+                        time.sleep(4)
                     else:
                         st.error(f"エラーが発生しました（{max_retries}回試行）: {e}")
 
