@@ -37,22 +37,20 @@ if urls_input:
         else:
             st.error(f"商品 {idx}: 有効なAmazon URLが見つかりませんでした。")
 
-if st.button("🤖 Geminiで商品を要約・比較する"):
+    if st.button("🤖 Geminiで商品を要約・比較する"):
         if not api_key:
             st.error("APIキーが設定されていません。")
             st.stop()
 
+        # 正しい最新モデル候補（Flashが高負荷時は Pro プレビューへ切り替え）
         models_to_try = [
             "gemini-3.8-flash",
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-1.5-flash"
+            "gemini-3.1-pro-preview"
         ]
         response = None
         used_model = ""
-        error_logs = []  # エラー詳細を記録するリスト
 
-        with st.spinner("AIが商品を比較分析中...（空いているモデルを探して接続しています）"):
+        with st.spinner("AIが商品を比較分析中...（混雑時は自動でバックアップモデルに接続します）"):
             client = genai.Client(api_key=api_key)
             prompt = f"""
 以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
@@ -66,7 +64,8 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
             for target_model in models_to_try:
-                for attempt in range(1, 3):
+                # 各モデルで3回再試行（待ち時間を5秒確保）
+                for attempt in range(1, 4):
                     try:
                         response = client.models.generate_content(
                             model=target_model,
@@ -75,8 +74,10 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
                         used_model = target_model
                         break
                     except Exception as e:
-                        error_logs.append(f"[{target_model} - 試行{attempt}] {e}")
-                        time.sleep(2)
+                        if "503" in str(e) or "UNAVAILABLE" in str(e):
+                            time.sleep(5)
+                        else:
+                            break
                 
                 if response:
                     break
@@ -86,6 +87,4 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
             st.caption(f"使用モデル: {used_model}")
             st.markdown(response.text)
         else:
-            st.error("すべてのモデル試行でエラーが発生しました。以下が詳細ログです：")
-            for log in error_logs:
-                st.write(f"- `{log}`")
+            st.error("APIサーバーが大変混雑しています。1分ほど時間をおいてから再度お試しくさい。")
