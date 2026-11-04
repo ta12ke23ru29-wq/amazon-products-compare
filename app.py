@@ -43,11 +43,15 @@ if urls_input:
             st.error("APIキーが設定されていません。")
             st.stop()
 
-        try:
-            client = genai.Client(api_key=api_key)
+# --- 自動リトライ付きのAI呼び出し ---
+        max_retries = 3  # 最大3回再試行
+        response = None
 
-            with st.spinner("AIが商品を比較分析中..."):
-                prompt = f"""
+        with st.spinner("AIが商品を比較分析中...（混雑時は自動で再試行します）"):
+            for attempt in range(1, max_retries + 1):
+                try:
+                    client = genai.Client(api_key=api_key)
+                    prompt = f"""
 以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
 
 対象URLリスト:
@@ -58,13 +62,14 @@ if urls_input:
 2. **比較表**（主な特徴、メリット、注意点を表形式で整理）
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
-                response = client.models.generate_content(
-                    model="gemini-3.8-flash",
-                    contents=prompt
-                )
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=prompt
+                    )
+                    break  # 成功したらループを抜ける
 
-                st.subheader("💡 AI比較・分析結果")
-                st.markdown(response.text)
-
-        except Exception as e:
-            st.error(f"エラーが発生しました: {e}")
+                except Exception as e:
+                    if attempt < max_retries:
+                        time.sleep(5)  # 5秒待って再試行
+                    else:
+                        st.error(f"エラーが発生しました（{max_retries}回試行）: {e}")
