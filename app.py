@@ -42,15 +42,16 @@ if urls_input:
             st.error("APIキーが設定されていません。")
             st.stop()
 
-        # 正しい最新モデル候補（Flashが高負荷時は Pro プレビューへ切り替え）
+        # 試すモデルの優先候補
         models_to_try = [
             "gemini-3.8-flash",
             "gemini-3.1-pro-preview"
         ]
         response = None
         used_model = ""
+        last_error = ""
 
-        with st.spinner("AIが商品を比較分析中...（混雑時は自動でバックアップモデルに接続します）"):
+        with st.spinner("AIが商品を比較分析中...（サーバーの空きを待ちながら自動接続しています）"):
             client = genai.Client(api_key=api_key)
             prompt = f"""
 以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
@@ -63,8 +64,8 @@ if urls_input:
 2. **比較表**（主な特徴、メリット、注意点を表形式で整理）
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
+            # モデルごとに最大3回ずつリトライ（段階的に待ち時間を増加）
             for target_model in models_to_try:
-                # 各モデルで3回再試行（待ち時間を5秒確保）
                 for attempt in range(1, 4):
                     try:
                         response = client.models.generate_content(
@@ -74,10 +75,10 @@ if urls_input:
                         used_model = target_model
                         break
                     except Exception as e:
-                        if "503" in str(e) or "UNAVAILABLE" in str(e):
-                            time.sleep(5)
-                        else:
-                            break
+                        last_error = str(e)
+                        # 混雑(503)や制限時は 5秒, 10秒 と待ち時間を伸ばして再試行
+                        wait_time = attempt * 5
+                        time.sleep(wait_time)
                 
                 if response:
                     break
@@ -87,4 +88,4 @@ if urls_input:
             st.caption(f"使用モデル: {used_model}")
             st.markdown(response.text)
         else:
-            st.error("APIサーバーが大変混雑しています。1分ほど時間をおいてから再度お試しくさい。")
+            st.error(f"APIサーバーが一時的な高負荷状態です。数分おいて再度お試しください。（詳細: {last_error}）")
