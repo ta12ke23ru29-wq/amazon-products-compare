@@ -1,4 +1,5 @@
 import re
+import time
 import streamlit as st
 from google import genai
 
@@ -7,7 +8,7 @@ st.title("Amazon商品比較 & サクラチェッカー AI")
 
 st.write("AmazonのURLを複数入力（1行に1つ）して、商品の要約と一覧比較を行います。")
 
-# APIキーを secrets.toml から自動取得（無い場合のみサイドバーで入力）
+# APIキーを secrets.toml から自動取得
 api_key = st.secrets.get("GEMINI_API_KEY")
 
 with st.sidebar:
@@ -18,11 +19,10 @@ with st.sidebar:
         st.success("APIキーは自動読み込みされました")
     st.markdown("[👉 APIキーの取得はこちら (Google AI Studio)](https://aistudio.google.com/)")
 
-# メイン画面の入力フォーム（複数行対応テキストエリア）
+# メイン画面の入力フォーム
 urls_input = st.text_area("AmazonのURLを入力してください（複数ある場合は改行）", "", height=150)
 
 if urls_input:
-    # 改行で分割して空行を除外
     url_list = [u.strip() for u in urls_input.split("\n") if u.strip()]
     asins = []
 
@@ -37,14 +37,12 @@ if urls_input:
         else:
             st.error(f"商品 {idx}: 有効なAmazon URLが見つかりませんでした。")
 
-    # AI分析ボタン
     if st.button("🤖 Geminiで商品を要約・比較する"):
         if not api_key:
             st.error("APIキーが設定されていません。")
             st.stop()
 
-# --- 自動リトライ付きのAI呼び出し ---
-        max_retries = 3  # 最大3回再試行
+        max_retries = 3
         response = None
 
         with st.spinner("AIが商品を比較分析中...（混雑時は自動で再試行します）"):
@@ -66,10 +64,14 @@ if urls_input:
                         model="gemini-2.5-flash",
                         contents=prompt
                     )
-                    break  # 成功したらループを抜ける
+                    break
 
                 except Exception as e:
                     if attempt < max_retries:
-                        time.sleep(5)  # 5秒待って再試行
+                        time.sleep(5)
                     else:
                         st.error(f"エラーが発生しました（{max_retries}回試行）: {e}")
+
+        if response:
+            st.subheader("💡 AI比較・分析結果")
+            st.markdown(response.text)
