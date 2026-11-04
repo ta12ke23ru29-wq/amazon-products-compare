@@ -42,12 +42,17 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
             st.error("APIキーが設定されていません。")
             st.stop()
 
-        # 試すモデルのリスト（混雑時は次のモデルに自動切替）
-        models_to_try = ["gemini-3.8-flash", "gemini-2.5-pro"]
+        # 試すモデルの優先順位リスト（混雑状況に合わせて自動切替）
+        models_to_try = [
+            "gemini-3.8-flash",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-1.5-flash"
+        ]
         response = None
         used_model = ""
 
-        with st.spinner("AIが商品を比較分析中...（混雑時は自動で別モデルに切り替えます）"):
+        with st.spinner("AIが商品を比較分析中...（空いているモデルを探して接続しています）"):
             client = genai.Client(api_key=api_key)
             prompt = f"""
 以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
@@ -61,8 +66,8 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
             for target_model in models_to_try:
-                # 各モデルで最大2回までリトライ
-                for attempt in range(2):
+                # 各モデルで最大3回まで再試行
+                for attempt in range(1, 4):
                     try:
                         response = client.models.generate_content(
                             model=target_model,
@@ -71,18 +76,19 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
                         used_model = target_model
                         break  # 成功したらループ脱出
                     except Exception as e:
-                        if "503" in str(e) or "UNAVAILABLE" in str(e):
-                            time.sleep(3)  # 混雑の場合は少し待って再試行
+                        # 混雑(503)や一時的な制限の場合は少し待って再試行
+                        if "503" in str(e) or "UNAVAILABLE" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                            time.sleep(4)
                         else:
-                            # 503以外のエラー（404等）は即次のモデルへ
+                            # 存在しないモデル(404など)はすぐに次のモデル候補へ
                             break
                 
                 if response:
-                    break  # 成功していればモデル切替ループも脱出
+                    break  # 正常に取得できたらモデル探索を終了
 
         if response:
             st.subheader("💡 AI比較・分析結果")
             st.caption(f"使用モデル: {used_model}")
             st.markdown(response.text)
         else:
-            st.error("サーバーが大変混雑しているため、時間をおいて再度お試しください。")
+            st.error("APIサーバーが極めて混雑しています。1〜2分ほど待ってから再度ボタンを押してください。")
