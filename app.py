@@ -37,19 +37,19 @@ if urls_input:
         else:
             st.error(f"商品 {idx}: 有効なAmazon URLが見つかりませんでした。")
 
-    if st.button("🤖 Geminiで商品を要約・比較する"):
+if st.button("🤖 Geminiで商品を要約・比較する"):
         if not api_key:
             st.error("APIキーが設定されていません。")
             st.stop()
 
-        max_retries = 3
+        # 試すモデルのリスト（混雑時は次のモデルに自動切替）
+        models_to_try = ["gemini-3.8-flash", "gemini-2.5-pro"]
         response = None
+        used_model = ""
 
-        with st.spinner("AIが商品を比較分析中...（混雑時は自動で再試行します）"):
-            for attempt in range(1, max_retries + 1):
-                try:
-                    client = genai.Client(api_key=api_key)
-                    prompt = f"""
+        with st.spinner("AIが商品を比較分析中...（混雑時は自動で別モデルに切り替えます）"):
+            client = genai.Client(api_key=api_key)
+            prompt = f"""
 以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
 
 対象URLリスト:
@@ -60,18 +60,29 @@ if urls_input:
 2. **比較表**（主な特徴、メリット、注意点を表形式で整理）
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
-                    response = client.models.generate_content(
-                        model="gemini-3.8-flash",
-                        contents=prompt
-                    )
-                    break
-
-                except Exception as e:
-                    if attempt < max_retries:
-                        time.sleep(4)
-                    else:
-                        st.error(f"エラーが発生しました（{max_retries}回試行）: {e}")
+            for target_model in models_to_try:
+                # 各モデルで最大2回までリトライ
+                for attempt in range(2):
+                    try:
+                        response = client.models.generate_content(
+                            model=target_model,
+                            contents=prompt
+                        )
+                        used_model = target_model
+                        break  # 成功したらループ脱出
+                    except Exception as e:
+                        if "503" in str(e) or "UNAVAILABLE" in str(e):
+                            time.sleep(3)  # 混雑の場合は少し待って再試行
+                        else:
+                            # 503以外のエラー（404等）は即次のモデルへ
+                            break
+                
+                if response:
+                    break  # 成功していればモデル切替ループも脱出
 
         if response:
             st.subheader("💡 AI比較・分析結果")
+            st.caption(f"使用モデル: {used_model}")
             st.markdown(response.text)
+        else:
+            st.error("サーバーが大変混雑しているため、時間をおいて再度お試しください。")
