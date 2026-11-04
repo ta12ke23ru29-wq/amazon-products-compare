@@ -42,7 +42,6 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
             st.error("APIキーが設定されていません。")
             st.stop()
 
-        # 試すモデルの優先順位リスト（混雑状況に合わせて自動切替）
         models_to_try = [
             "gemini-3.8-flash",
             "gemini-2.5-pro",
@@ -51,6 +50,7 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
         ]
         response = None
         used_model = ""
+        error_logs = []  # エラー詳細を記録するリスト
 
         with st.spinner("AIが商品を比較分析中...（空いているモデルを探して接続しています）"):
             client = genai.Client(api_key=api_key)
@@ -66,29 +66,26 @@ if st.button("🤖 Geminiで商品を要約・比較する"):
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
             for target_model in models_to_try:
-                # 各モデルで最大3回まで再試行
-                for attempt in range(1, 4):
+                for attempt in range(1, 3):
                     try:
                         response = client.models.generate_content(
                             model=target_model,
                             contents=prompt
                         )
                         used_model = target_model
-                        break  # 成功したらループ脱出
+                        break
                     except Exception as e:
-                        # 混雑(503)や一時的な制限の場合は少し待って再試行
-                        if "503" in str(e) or "UNAVAILABLE" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                            time.sleep(4)
-                        else:
-                            # 存在しないモデル(404など)はすぐに次のモデル候補へ
-                            break
+                        error_logs.append(f"[{target_model} - 試行{attempt}] {e}")
+                        time.sleep(2)
                 
                 if response:
-                    break  # 正常に取得できたらモデル探索を終了
+                    break
 
         if response:
             st.subheader("💡 AI比較・分析結果")
             st.caption(f"使用モデル: {used_model}")
             st.markdown(response.text)
         else:
-            st.error("APIサーバーが極めて混雑しています。1〜2分ほど待ってから再度ボタンを押してください。")
+            st.error("すべてのモデル試行でエラーが発生しました。以下が詳細ログです：")
+            for log in error_logs:
+                st.write(f"- `{log}`")
