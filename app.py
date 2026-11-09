@@ -44,10 +44,12 @@ if urls_input:
         with st.spinner("AIが商品を比較分析中..."):
             try:
                 client = genai.Client(api_key=api_key)
+                # プロンプトを軽量化し、タイムアウトを防ぐ指示を追加
                 prompt = f"""
-以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
+以下のAmazon商品（ASIN/URL）について、あなたが持つ知識に基づいて概要を整理・比較分析してください。
+※URLへのアクセス試行は行わず、手持ちの知識で即座に回答を作成してください。
 
-対象URLリスト:
+対象リスト:
 {chr(10).join(url_list)}
 
 出力フォーマット:
@@ -55,7 +57,6 @@ if urls_input:
 2. **比較表**（主な特徴、メリット、注意点を表形式で整理）
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
-                # 最新の gemini-3.8-flash モデルを指定
                 response = client.models.generate_content(
                     model="gemini-3.8-flash",
                     contents=prompt
