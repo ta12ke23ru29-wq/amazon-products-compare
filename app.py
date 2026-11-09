@@ -1,5 +1,4 @@
 import re
-import time
 import streamlit as st
 from google import genai
 
@@ -42,18 +41,10 @@ if urls_input:
             st.error("APIキーが設定されていません。")
             st.stop()
 
-        # 試すモデルの優先候補
-        models_to_try = [
-            "gemini-3.8-flash",
-            "gemini-3.1-pro-preview"
-        ]
-        response = None
-        used_model = ""
-        last_error = ""
-
-        with st.spinner("AIが商品を比較分析中...（サーバーの空きを待ちながら自動接続しています）"):
-            client = genai.Client(api_key=api_key)
-            prompt = f"""
+        with st.spinner("AIが商品を比較分析中..."):
+            try:
+                client = genai.Client(api_key=api_key)
+                prompt = f"""
 以下のAmazon商品URLリストの製品について概要を収集・要約し、分かりやすく比較分析してください。
 
 対象URLリスト:
@@ -64,28 +55,17 @@ if urls_input:
 2. **比較表**（主な特徴、メリット、注意点を表形式で整理）
 3. **こんな人におすすめ**（商品ごとのターゲット像）
 """
-            # モデルごとに最大3回ずつリトライ（段階的に待ち時間を増加）
-            for target_model in models_to_try:
-                for attempt in range(1, 4):
-                    try:
-                        response = client.models.generate_content(
-                            model=target_model,
-                            contents=prompt
-                        )
-                        used_model = target_model
-                        break
-                    except Exception as e:
-                        last_error = str(e)
-                        # 混雑(503)や制限時は 5秒, 10秒 と待ち時間を伸ばして再試行
-                        wait_time = attempt * 5
-                        time.sleep(wait_time)
-                
-                if response:
-                    break
+                # リトライを行わず直接リクエスト
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
+                )
 
-        if response:
-            st.subheader("💡 AI比較・分析結果")
-            st.caption(f"使用モデル: {used_model}")
-            st.markdown(response.text)
-        else:
-            st.error(f"APIサーバーが一時的な高負荷状態です。数分おいて再度お試しください。（詳細: {last_error}）")
+                if response and response.text:
+                    st.subheader("💡 AI比較・分析結果")
+                    st.markdown(response.text)
+                else:
+                    st.error("AIからの回答が空でした。再度お試しください。")
+
+            except Exception as e:
+                st.error(f"エラーが発生しました: {e}")
